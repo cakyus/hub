@@ -1,0 +1,108 @@
+#!/usr/bin/php
+<?php
+
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+ * MA 02110-1301, USA.
+ * 
+ */
+
+$hub = new Hub;
+$hub->start();
+
+class Hub {
+    
+    public $commands;
+    public $apiURL;
+    
+    public function __construct() {
+        $this->commands = array();
+        $this->apiURL = 'https://api.github.com';
+    }
+    
+    public function start() {
+        $this->executeCommand();
+    }
+    
+    public function executeCommand() {
+        
+        // handle command line arguments
+        $commands = $_SERVER['argv'];
+        array_shift($commands);
+        
+        if (count($commands) == 0) {
+            $commandFirst = 'Help';
+        } else {
+            $commandFirst = ucfirst($commands[0]);
+        }
+        
+        $commandFirst = 'command'.$commandFirst;
+        
+        $methods = get_class_methods($this);
+        if (in_array($commandFirst, $methods)) {
+            call_user_func(array($this, $commandFirst));
+        } else {
+            $this->commandHelp();
+        }
+    }
+    
+    public function commandForks() {
+        $remotes = $this->getRemotes();
+        foreach ($remotes as $remote) {
+            if (preg_match(
+                  "/github\.com\/(.+)\/(.+)\.git/"
+                , $remote, $match)) {
+                $apiURLFork = $this->apiURL
+                    .'/repos/'.$match[1].'/'.$match[2].'/forks'
+                    ;
+                $output = file_get_contents($apiURLFork);
+                if (preg_match_all(
+                     "/\"clone_url\":\"(.+)\"/U"
+                    , $output, $match)) {
+                    echo implode("\n", $match[1])."\n";
+                }
+            }
+        }
+    }
+    
+    public function commandHelp() {
+        echo <<<TEXT
+usage: git hub <command> [<args>]
+
+commands:
+    help    show this information
+    forks   list avaliable forks in github
+
+TEXT;
+    }
+    
+    /**
+     * Get remote repositories
+     * 
+     * @return array of remote repositories in github
+     **/
+    
+    private function getRemotes() {
+        exec('git remote -v', $lines);
+        $output = implode("\n", $lines);
+        if (preg_match_all(
+              "/github\.com\/(.+)\/(.+)\.git/"
+            , $output, $match
+            )) {
+            return array_unique($match[0]);
+        }
+        return array();
+    }
+}
